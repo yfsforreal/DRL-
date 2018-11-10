@@ -1,0 +1,54 @@
+#程序功能：从清洗过的数据源里（cleaned.xlsx), 
+#按照特定日期区间，程序会列出区间内每天卖出的SKU列表，卖出的件数，收入，利润，SKU对应的分类，分类序号，大类，性别。
+
+import pandas as pd
+import numpy as np
+from datetime import timedelta, date
+
+#确定开始以及结束日期。（结束日期本身并不包含）
+#例：如果需要8月1日到8月31日的数据，那么下方开始日期写2018，8，1，结束日期写2018，9，1
+start_date = date(2018, 8, 1)
+end_date = date(2018, 8, 3)
+
+#生成需要的日期的List.
+
+def daterange(start_date, end_date):
+    for n in range(int ((end_date - start_date).days)):
+        yield start_date + timedelta(n)
+date_list = []
+for single_date in daterange(start_date, end_date):
+    date_list.append(single_date.strftime("%Y-%m-%d"))
+
+    
+#日期区间左右单独日期走一遍    
+df_result = pd.DataFrame()
+for date in date_list:
+    #读取数据，需要有清洗过的数据源以及字典表，文件名称如下。
+    raw_data = "cleaned.xlsx"
+    df = pd.read_excel(raw_data)
+    df_dict = pd.read_excel("跆拳道分类对应SKU-字典表-9.11.xlsx")
+    #只取需要的列
+    df = df[["货号", "分类","分类序号", "调整时间","实际收入","净利润","新整理销售渠道","用户名称"]]
+    df = df.loc[df["调整时间"] == date ]
+    #数据源上使用数据透视表
+    df_pivot = df.pivot_table(index = "货号", values = ["调整时间","实际收入","净利润"], aggfunc={'调整时间':"count", "实际收入" : np.sum, "净利润":np.sum})
+    #从字典表上添加需要的信息
+    df = df.drop_duplicates(subset=["货号"])
+    df = df[["货号", "分类","分类序号", "调整时间","新整理销售渠道","用户名称"]]
+    df_dict = df_dict.drop_duplicates(subset=["货号"])
+    df_dict = df_dict[["货号","大类", "性别"]]
+    df_pivot = df_pivot.merge(df ,on = "货号", how = 'left')
+    df_pivot = df_pivot.merge(df_dict,on = "货号", how = 'left')
+    #重命名列，按照分类序号排列，日期作为首列。
+    df_pivot = df_pivot.rename(columns={'调整时间_x': '销售数量', '调整时间_y': '日期'})
+    df_pivot = df_pivot.sort_values(by = "分类序号")
+    df_pivot = df_pivot.set_index("日期")
+    #
+    df_result = df_result.append(df_pivot)
+
+#建立新的excel表格
+df_result.to_excel("daily_finished.xlsx")
+print("完成！")
+
+
+
