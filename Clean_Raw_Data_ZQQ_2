@@ -1,0 +1,166 @@
+#处理数据源。具体情况请看以下深蓝色字体解释。
+#注意：程序所在的文件夹必须有三个单独的.xlsx文件，分别是"raw_data.xlsx", "货品类型字典表.xlsx","货品来源字典表.xlsx"
+#每个.xlsx文件只能有一个sheet。
+#Ctrl + D运行。框框左上角会变成"*" , 程序完成后会在框框下提示：“完成！”。 运行时间1分钟左右，数据越大运行时间越长，不过一般不会超过2分钟。
+
+
+import pandas as pd
+import numpy as np
+
+raw_data = "raw_data.xlsx"
+df = pd.read_excel(raw_data)
+
+#需要的列：项目	用户名称	货号	销售单价	
+#优惠券优惠金额	实际收入	快递成本	平台手续费	净利润	
+#发货仓库	下单时间	销售渠道	供应商	品牌	商品状态
+df = df[["项目","用户名称","货号","销售单价","优惠券优惠金额","实际收入","快递成本",
+         "平台手续费","净利润","发货仓库","下单时间","销售渠道","供应商","品牌","商品状态"]]
+
+#插入一列“商品数”	行标签		请计入
+#	发货		1
+#	非商品项		0
+#	商品项		1
+#	退货		-1
+
+def f(df):
+    if df["项目"] == "发货":
+        val = 1
+    elif df["项目"] == "退货":
+        val = -1
+    elif df["项目"] == "商品项":
+        val = 1
+    elif df["项目"] == "非商品项":
+        val = 0
+    return val
+
+df["商品数"] =  df.apply(f, axis=1)
+
+
+
+#插入一列“调整销售大渠道”
+#jd_username = ["jingdong", "jd_yj_user1", "jd_drl_user1"]
+#tmall_username = ["qjd_user1", "阿迪达斯武搏专卖店", "淘宝户外1"]
+
+
+
+#de = ["大客户", "岱润霖", "非销售类渠道"]
+df = df.drop(df[df["销售渠道"] == "大客户"].index)
+df = df.drop(df[df["销售渠道"] == "岱润霖"].index)
+df = df.drop(df[df["销售渠道"] == "非销售类渠道"].index)
+
+new_pl_dict = {
+     "fenxiao":"户外分销",
+    "爱库存平台":"团购平台",
+    "渠道分销":"运动分销",
+     "团购平台":"团购平台",
+     "运动自营":"运动自营",
+    "粮本": "粮本",
+    "云集平台":"团购平台",
+    "非销售类渠道":"其他",
+    "一品库":"新零售",
+    "信贷批发专用":"其他"
+}
+
+def new_pl(df):
+    for key, value in new_pl_dict.items():
+        if df["销售渠道"] == key:
+            if df["用户名称"] == "jingdong":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "jd_yj_user1":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "jd_drl_user1":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "qjd_user1":
+                pl = "天猫"
+                return pl
+            elif df["用户名称"] == "阿迪达斯武搏专卖店":
+                pl = "天猫"
+                return pl
+            elif df["用户名称"] == "淘宝户外1":
+                pl = "天猫"
+                return pl
+            elif df["用户名称"] == "唯品会":
+                pl = "唯品会"
+                return pl
+            elif df["用户名称"] == "郎溪店":
+                pl = "新零售"
+                return pl
+            else:
+                return value
+            
+        elif df["用户名称"] == "怡乐中街店":
+            pl = "新零售"
+            return pl
+        elif df["用户名称"] == "zhonghao":
+            pl = "其他"
+            return 
+        
+            
+       
+df["调整销售大渠道"] =  df.apply(new_pl, axis=1)
+#有些渠道不统计，所以删除掉那些。
+#df["调整销售大渠道"] = df["调整销售大渠道"].dropna()
+
+#插入一列“调整销售小渠道”
+def new_pl_small(df):
+    for key, value in new_pl_dict.items():
+        if df["销售渠道"] == key:
+            if df["用户名称"] == "jingdong":
+                pl = "jingdong"
+                return pl
+            elif df["用户名称"] == "jd_yj_user1":
+                pl = "jd_yj_user1"
+                return pl
+            elif df["用户名称"] == "jd_drl_user1":
+                pl = "jd_drl_user1"
+                return pl
+            elif df["用户名称"] == "qjd_user1":
+                pl = "qjd_user1"
+                return pl
+            elif df["用户名称"] == "阿迪达斯武搏专卖店":
+                pl = "阿迪达斯武搏专卖店"
+                return pl
+            elif df["用户名称"] == "淘宝户外1":
+                pl = "淘宝户外1"
+                return pl
+            elif df["用户名称"] == "zhonghao":
+                pl = "zhonghao"
+                return pl
+            elif df["用户名称"] == "郎溪店":
+                pl = "郎溪店"
+                return pl
+            elif df["用户名称"] == "怡乐中街店":
+                pl = "怡乐中街店"
+                return pl
+            elif df["用户名称"] == "唯品会":
+                pl = "唯品会"
+                return pl
+            else:
+                return value
+            
+        elif df["用户名称"] == "怡乐中街店":
+            pl = "怡乐中街店"
+            return pl
+        elif df["用户名称"] == "zhonghao":
+            pl = "zhonghao"
+            return 
+
+            
+df["调整销售小渠道"] =  df.apply(new_pl_small, axis=1)
+
+#插入一列“货品类型分类”
+df_cat = pd.read_excel("货品类型字典表.xlsx")
+df_cat = df_cat.drop_duplicates(subset=["供应商", "品牌"])
+df = pd.merge(df, df_cat, left_on=["供应商", "品牌"], right_on=["供应商", "品牌"], how='left')
+
+#插入一列“货品来源分类”
+df_ori = pd.read_excel("货品来源字典表.xlsx")
+df_ori = df_ori.drop_duplicates(subset=["供应商","发货仓库","品牌"])
+df = pd.merge(df, df_ori, left_on=["供应商","发货仓库","品牌"], right_on=["供应商","发货仓库","品牌"], how='left')
+
+df.to_excel("cleaned.xlsx")
+print("完成！")
+
