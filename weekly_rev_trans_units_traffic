@@ -1,0 +1,68 @@
+import pandas as pd 
+import numpy as np
+
+#程序功能：自动生成每周分天数的Revenue, Transactions, Units, Traffic的Excel报表。
+#分为BBG和LX两个单独的报表。
+
+#BBG
+#下载含有关键信息的表格，改文件名参考下面。
+rev_trans_bbg = "rev_trans_bbg.xls"
+traffic_bbg = "traffic_bbg.xls"
+units_bbg = "units_bbg.csv"
+
+#把这些文件读入Python缓存。
+df_rt = pd.read_excel(rev_trans_bbg, encoding = "gbk", index_col = 0 )
+df_traf = pd.read_excel(traffic_bbg, encoding = "gbk", index_col = 0 )
+df_units = pd.read_csv(units_bbg, encoding = "gbk")
+df_units["出入库编号"] = df_units["出入库编号"].str.slice(2, 10)
+
+#只取需要的列
+df_rt = df_rt[["销售单数","销售金额"]]
+df_traf = df_traf[["顾客进入量", "顾客出门量"] ]
+df_traf["Traffic"] = (df_traf["顾客进入量"] + df_traf["顾客出门量"]) / 2
+df_traf = df_traf[["Traffic"]]
+df_units = df_units[["出入库编号", "出入库数"]]
+df_units = df_units.pivot_table(index = "出入库编号", values = "出入库数", aggfunc = np.sum )
+
+df_rt = df_rt.reset_index()
+df_traf = df_traf.reset_index()
+df_units = df_units.reset_index()
+
+df_rt["Traffic"] = df_traf["Traffic"]
+df_rt["Units"] = df_units["出入库数"]
+df_rt.columns = ["Date", 'Transactions', 'Revenue', 'Traffic', 'Units']
+
+#==========================生成表格==========================
+df_rt.to_excel("weekly_rev_trans_units_traffic_BBG.xlsx")
+
+
+
+#LX
+#下载含有关键信息的表格，改文件名参考下面。
+rev_trans_lx = "rev_trans_lx.xls"
+units_lx = "units_lx.csv"
+
+#把这些文件读入Python缓存。
+df_rt = pd.read_excel(rev_trans_lx, encoding = "gbk", index_col = 0 )
+df_units = pd.read_csv(units_lx, encoding = "gbk")
+df_units["出入库编号"] = df_units["出入库编号"].str.slice(2, 10)
+
+#只取需要的列
+df_rt = df_rt[["销售单数","销售金额"]]
+df_units = df_units[["出入库编号", "出入库数"]]
+df_units = df_units.pivot_table(index = "出入库编号", values = "出入库数", aggfunc = np.sum )
+
+df_rt = df_rt.reset_index()
+df_units = df_units.reset_index()
+
+df_rt["Units"] = df_units["出入库数"]
+df_rt.columns = ["Date", 'Transactions', 'Revenue', 'Units']
+
+#==========================生成表格==========================
+df_rt.to_excel("weekly_rev_trans_units_LX.xlsx")
+
+print("done.")
+
+
+
+
