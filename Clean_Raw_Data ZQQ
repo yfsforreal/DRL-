@@ -1,0 +1,100 @@
+#程序功能：处理数据源。具体处理流程请看以下”#“打头的评论内容。
+#注意：数据源请先更名为："raw_data.xlsx"
+
+
+import pandas as pd
+import numpy as np
+
+raw_data = "raw_data.xlsx"
+df = pd.read_excel(raw_data) 
+
+
+#商品状态	配货中	修改为“未发货”
+#	缺货	不统计
+#	退货完成	不统计
+#	退货中	修改为“已发货”
+#	已发货	保留
+#	已确认	修改为“未发货”
+#	用户取消	不统计
+status_dict = {"配货中":"未发货", "退货中":"已发货", "已发货": "已发货", "已确认":"未发货"}
+def new_status(df):
+    for key, value in status_dict.items():
+        if df["商品状态"] == key:
+            return value 
+        
+df["商品状态"] =  df.apply(new_status, axis=1)
+df["商品状态"] = df["商品状态"].astype("category")
+df = df.dropna(subset=["商品状态"])
+
+
+#订单类型		
+#	换货订单	不统计
+#	正常订单	统计
+df = df.loc[df["订单类型"] == "正常订单"]
+df["订单类型"] = df["订单类型"].astype("category")
+
+#插入新列“订单数量”	IF公式：订单号唯一“1”，相同“0”
+df["订单号"] = df["订单号"].astype("category")
+df["订单数量"] = df["订单号"] == df["订单号"].shift()
+d = {False:"1", True:"0"}
+df["订单数量"] = df["订单数量"].replace(d)
+
+#库房	
+#	虚拟锁库仓	修改为：“上海宝原7号仓”
+#	虚拟锁库仓1	修改为：“上海宝原11号仓”
+#	虚拟锁库仓D	修改为：“上海宝原东莞RDC仓”
+#	虚拟锁库仓Q	修改为：“上海宝原青浦仓”
+#	虚拟锁库仓S	修改为：“上海宝原沈阳RDC仓”
+#	虚拟锁库仓X	修改为：“上海宝原西安RDC仓”
+#	(空白)	不统计
+df = df.dropna(subset=["库房"])
+dict_warehouse = {
+                   "虚拟锁库仓": "上海宝原7号仓",
+                  "虚拟锁库仓1":"上海宝原11号仓",
+                  "虚拟锁库仓D":"上海宝原东莞RDC仓",
+                  "虚拟锁库仓Q":"上海宝原青浦仓",
+                  "虚拟锁库仓S":"上海宝原沈阳RDC仓",
+                  "虚拟锁库仓X": "上海宝原西安RDC仓"}
+df["库房"] = df["库房"].replace(dict_warehouse)
+
+
+#插入新列“发货时效”	条件：商品状态=已发货	发货时效=（发货时间-采购时间）天*24小时
+#	条件：商品状态=未发货	发货时间=（NOW-采购时间）天*24小时
+#		发货时间=（NOW-"采购时间=0,"下单时间）天*24小时
+import datetime
+now = datetime.datetime.now()
+times = ["发货时间","采购时间","下单时间" ]
+
+for i in times:
+    df[i] = pd.to_datetime(df[i], errors='coerce')
+    
+def fhsx(df):
+    if df["商品状态"] == "已发货":
+        val = df["发货时间"] - df["采购时间"]
+    elif df["商品状态"] == "未发货":
+        val = now - df["采购时间"]
+    return val
+
+df["发货时效"] =  df.apply(fhsx, axis=1)
+df["发货时效"] = (df["发货时效"] / np.timedelta64(1, 'h')).round(decimals=1)
+
+
+#插入新列“发货备注”	条件：发货时效<=24,“24小时”
+#	条件：发货时效>24且<=48,“48小时”
+#	条件：发货时效>48,“超48小时”
+v = ""
+def fhbz(df):
+    global v
+    if df["发货时效"] <= 24:
+        v = "24小时"
+    elif df["发货时效"] > 24 and df["发货时效"] <= 48:
+        v = "48小时"
+    elif df["发货时效"] > 48:
+        v = "超48小时"
+    return v
+df["发货备注"] = df.apply(fhbz, axis=1)
+
+
+#生成新表格
+df.to_excel("处理后数据源.xlsx")
+print("完成啦！")
