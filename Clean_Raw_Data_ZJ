@@ -1,0 +1,118 @@
+#本程序功能：自动处理元数据，不更改元数据文件本身。会生成新Excel表格，包含新整理分类，商品数，调整时间等。
+#数据源改名为：“"raw_data.xlsx" 大小写注意。文件夹内要有"SKU分类查询表.xlsx“
+#把数据源放到与ipynb文件同一文件夹下。代码会自动读取数据源.
+#程序本身是代码性质，很重要一点就是不要改动代码，错一处就无法运行。
+#我会把代码备份，一旦被改错后，直接复制粘贴备份的代码到Jupyter notebook即可。
+#第三步，鼠标点击代码部分，不要改动，仅仅确定光标是在代码框里，然后按Ctrl+Enter，运行代码。差不多处理数据需要30秒左右时间.
+#处理完成后，会在代码框下方看到"Done!"
+
+
+import pandas as pd
+import numpy as np
+
+raw_data = "raw_data.xlsx"
+
+df = pd.read_excel(raw_data)
+
+#需要的列：销售渠道，货号，项目，实际收入，净利润，调整时间
+df = df[["销售渠道","货号","项目","实际收入","净利润","发货时间","调整时间","用户名称"]]
+
+#自建列：商品数，从项目里来做，发货是1，退货是-1
+def f(df):
+    if df["项目"] == "发货":
+        val = 1
+    elif df["项目"] == "退货":
+        val = -1
+    else:
+        val = 0
+    return val
+
+df["商品数"] =  df.apply(f, axis=1)
+
+
+#“调整时间”从日期时间改为仅仅日期
+#“调整时间”相当于是从“发货时间”的基础上再更改，最后生成一个“调整后时间”，
+#“调整时间”空白的话，就输入“发货时间"，如果不空白的话，就输入“调整时间“的值。
+df['调整时间'] = df['调整时间'].fillna(df['发货时间'])
+df['调整时间'] = df['调整时间'].dt.normalize()
+
+
+#从查询表里查分类，加入df。
+df_cat = pd.read_excel("SKU分类查询表.xlsx")
+df_cat = df_cat.drop_duplicates(subset=["货号"])
+df["货号"] = df["货号"].str.replace('/', "")
+df = df.merge(df_cat, on = "货号",how='left'  )
+
+#总净利率
+净利率 = df['净利润'].sum() / df['实际收入'].sum()
+print("净利率（总净利润除以总实际收入）为： " ,净利率)
+
+
+#新建列，分类序号
+cat_index_dict = {"男T":         1,
+                  "女T":         2,
+                  "童装-T恤" :   3,
+                  "短裤" :       4,
+                  "南韩丝夹克":  5,
+                  "毛圈夹克":    6,
+                  "帽衫":        7,
+                  "连帽卫衣":    8,
+                  "南韩丝-直筒": 9,
+                  "南韩丝-收腿裤":10,
+                  "毛圈直筒":   11,
+                  "毛圈-收腿裤":12,
+                  "涤绒长裤":   13,
+                  "ZNE-长裤":   14,
+                  "ZNE-夹克":   15}
+
+def cat_index(df):
+    for key, value in cat_index_dict.items():
+        if df["分类"] == key:
+            return value
+    
+df["分类序号"] =  df.apply(cat_index, axis=1)
+
+
+#重新建立“销售渠道”分类
+#用户名称里唯品会，放到新整理用户渠道“唯品会”
+jd_username = ["jingdong", "jd_yj_user1", "jd_drl_user1"]
+new_pl_dict = {
+     "渠道分销":"渠道分销",
+    "爱库存平台":"团购平台",
+    "云集平台":"团购平台",
+     "团购平台":"团购平台",
+     "运动自营":"运动自营",
+    "粮本": "其他",
+    "非销售类渠道":"其他",
+    "一品库":"其他",
+}
+
+
+def new_pl(df):
+    for key, value in new_pl_dict.items():
+        if df["销售渠道"] == key:
+            if df["用户名称"] == "jingdong":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "jd_yj_user1":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "jd_drl_user1":
+                pl = "京东"
+                return pl
+            elif df["用户名称"] == "唯品会":
+                pl = "唯品会"
+                return pl
+            else:
+                return value
+        elif df["用户名称"] == "怡乐中街店":
+            pl = "其他"
+            return pl
+       
+df["新整理销售渠道"] =  df.apply(new_pl, axis=1)
+
+
+#生成新表格
+df.to_excel("cleaned.xlsx")
+print("Done!")
+
