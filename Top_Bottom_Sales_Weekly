@@ -1,0 +1,125 @@
+#备注：
+#	1. 准备好掌秀商品信息总表。（有“大类”） 
+#	2. 下载所需门店，日期区间的出库单（有出库金额），进销存（有出库数量），入库单（有入库批次）
+#	3. 重命名文件：大库名称为："掌秀商品规格信息总表-8.20.xlsx"， 入库单为："in.csv"， 出库单为"out.csv"， 进销存单为："jxc.csv"。
+#	4. 打开Anaconda(绿色图标），打开Jupyter notebook, 在目录里找到文件所在文件夹，打开“Top_Bottom_Weekly.ipynb”
+#	5. 按Ctrl+Enter 运行代码。
+#	6. 在同一个文件夹里即可看到生成的top bottom表格，格式已经改好，只需要手工把图片加上。
+
+
+#程序功能：自动生成Top_Bottom Excel表格，分为四个文件，分别是销量最高的和销量最低的衣服和鞋类。
+
+
+
+#从掌秀下载入库单出库单进销存，改文件名参考下面。还需要总表。
+
+import pandas as pd 
+import numpy as np
+
+
+file_agginfo = "掌秀商品规格信息总表-8.20.xlsx"
+file_in = "in.csv"
+file_out = "out.csv"
+file_jxc = "jxc.csv"
+
+#把这些文件读入Python缓存。
+df_agginfo = pd.read_excel(file_agginfo)
+df_in = pd.read_csv(file_in, encoding = "gbk")
+df_out = pd.read_csv(file_out, encoding = "gbk")
+df_jxc = pd.read_csv(file_jxc, encoding = "gbk", header = 1)
+
+#只取需要的列
+df_jxc = df_jxc[["商品编码","商品名称","品牌","销售出库","期末库存" , "规格市场价"]]
+df_agginfo = df_agginfo[["商品编码", "大类"] ]
+df_in = df_in[["商品编码", "出入库单号"]]
+
+#删除掉入库单和总表里冗余的行，保证针对每条SKU只有一行信息，下面的merge数据行数才会不变
+df_in = df_in.drop_duplicates(subset=["商品编码"])  
+df_agginfo = df_agginfo.drop_duplicates(subset=["商品编码"]) 
+
+#通过类似Excel Vlookup的功能，根据共有列”商品编码”把重要信息作为列加入到进销存数据库里。
+df = df_jxc.merge(df_agginfo, on="商品编码",how='left')
+df = df.merge(df_in , on = "商品编码",how='left'  )
+
+#显示数据数量
+print(df_jxc.shape)
+print( df.shape)
+
+
+#==========================生成表格：Top_服装.xlsx==========================
+
+df_fz = df.loc[ df["大类"] == '服装' ]
+pt = df_fz.pivot_table(index = ["商品编码","商品名称","品牌","规格市场价"], 
+                       values =["期末库存","销售出库"], aggfunc = np.sum )
+pt = pt.loc[ pt["销售出库"] >= 2 ]
+pt.sort_values(by = "销售出库", ascending = False, inplace = True)
+pt = pt.reset_index()
+pt["销售金额"] = pt["规格市场价"] * pt["销售出库"]
+pt.head()
+pt.to_excel("Top_服装.xlsx")
+
+#==========================生成表格：Top_鞋类.xlsx==========================
+
+df_shoes = df.loc[ df["大类"] == '鞋类' ]
+pt = df_shoes.pivot_table(index = ["商品编码","商品名称","品牌","规格市场价"], 
+                          values =["期末库存","销售出库"], aggfunc = np.sum )
+pt = pt.loc[ pt["销售出库"] >= 2 ]
+pt.sort_values(by = "销售出库", ascending = False, inplace = True)
+pt = pt.reset_index()
+pt["销售金额"] = pt["规格市场价"] * pt["销售出库"]
+pt.head()
+pt.to_excel("Top_鞋类.xlsx")
+
+#==========================生成表格：Bottom_服装.xlsx==========================
+
+df_fz = df.loc[ df["大类"] == '服装' ]
+pt = df_fz.pivot_table(index = ["商品编码","商品名称","品牌","规格市场价","出入库单号"], 
+                       values =["期末库存","销售出库"], aggfunc = np.sum )
+pt = pt.loc[ pt["销售出库"] == 0  ]
+pt = pt.loc[ pt["期末库存"] >= 5  ]
+pt.sort_values(by = "期末库存", ascending = False, inplace = True)
+pt = pt.reset_index()
+pt.to_excel("Bottom_服装.xlsx")
+
+#==========================生成表格：Bottom_鞋类.xlsx==========================
+
+df_shoes = df.loc[ df["大类"] == '鞋类' ]
+pt = df_shoes.pivot_table(index = ["商品编码","商品名称","品牌","规格市场价","出入库单号"], 
+                          values =["期末库存","销售出库"], aggfunc = np.sum )
+pt = pt.loc[ pt["销售出库"] == 0  ]
+pt = pt.loc[ pt["期末库存"] >= 5  ]
+pt.sort_values(by = "期末库存", ascending = False, inplace = True)
+pt = pt.reset_index()
+pt.to_excel("Bottom_鞋类.xlsx")
+
+
+
+
+
+#对于每个表格，设置行高为35，自动调整单元格宽度，设置字体，字号，对齐格式, 填充颜色
+import os
+import win32com.client as win32
+
+file_list = ["Top_服装.xlsx", "Top_鞋类.xlsx","Bottom_服装.xlsx","Bottom_鞋类.xlsx" ]
+for file in file_list:
+    filepath = os.path.abspath(file)
+    excel = win32.gencache.EnsureDispatch('Excel.Application')
+    wb = excel.Workbooks.Open(filepath)
+    ws = wb.Worksheets("sheet1")
+    ws.Range("A1").Value = "产品图片"
+    ws.Range("A2:A2000").Value = ""
+    ws.Columns.AutoFit()
+    ws.Range("A：A").ColumnWidth = 20
+    ws.Rows.RowHeight = 35
+    ws.Range("A：K").Font.Size = 11
+    ws.Range("A：K").Font.Name = "黑体"
+    ws.Range("A：K").HorizontalAlignment = win32.constants.xlCenter
+    ws.Range("A：K").VerticalAlignment = win32.constants.xlCenter
+    ws.Range("C：E").Interior.ColorIndex = 35
+    wb.Save()
+    excel.Application.Quit()
+    
+
+print('完成！')
+
+
